@@ -21,6 +21,7 @@ from fancy import config as cfg
 import playsound
 
 
+
 class Camera(QThread):
     y1: float
     y2: float
@@ -47,7 +48,11 @@ class Camera(QThread):
         # self.depth = 53
         self.y1 = position_config.y1
         self.y2 = position_config.y2
-        self.depth = position_config.depth
+        self.max = 0
+        self.lastmin = 0
+        self.deep = 0
+        self.Rebound = 0
+        self.depth = 0
         self.ratio = self.depth / (self.y2 - self.y1)
         self.is_play_sound = position_config.is_play_sound
         self.is_test = position_config.is_test
@@ -90,8 +95,31 @@ class Camera(QThread):
 
     def setId(self, Id=9527):
         self.id = Id
+    # def calculate_deepth(self,i,RElbow,):
+    #     global max
+    #     global min
+    #     global lastmin
+    #     global deep
+    #     global Rebound
+    #     min = float(RElbow[1])
+    #     if i % 2 == 0:
+    #
+    #         if (max < float(RElbow[1])):
+    #             max = RElbow
+    #         if (max >= float(RElbow[1])):
+    #             deep = abs(max - min)
+    #             print("deepth:", deep)
+    #             lastMin = max
+    #         if (float(RElbow[1]) < lastmin):
+    #             lastmin = float(RElbow[1])
+    #         elif (float(RElbow[1]) > lastmin):
+    #             min = lastMin
+    #             Rebound = abs(max - min)
+    #             print("Rebound:", Rebound)
+    #             max = min
 
     def run(self) -> None:
+
         frame_cnt = 0
         # todo
         # openpose using model
@@ -117,6 +145,7 @@ class Camera(QThread):
         j = 0
         is_trace_down = True
         while self.running and self.connect:
+
             ret, frame = self.cap.read()
             if ret and self.is_preview:
                 self.rawdata.update_image.emit(frame)  # 發
@@ -166,13 +195,30 @@ class Camera(QThread):
                     # deepth = self.ratio * (float(RWrist[1]) - self.y1)
                     # cpr_info['depth'] = deepth
 
-                    print("left hand angle:", left_angle)
-                    print("right hand angle:", right_angle)
+                    # print("left hand angle:", left_angle)
+                    # print("right hand angle:", right_angle)
 
                     # dt = datetime.datetime.now()
                     # self.frequency_label.update_label.emit(str(dt))
                     # if left_angle != -1 and right_angle != -1:
                     # self.collection.insert_one(cpr_info)
+                    # min = float(RElbow[1])
+                    # if i % 2 == 0:
+                    #
+                    #     if(max < float(RElbow[1])):
+                    #         max = RElbow
+                    #     if(max >= float(RElbow[1])):
+                    #         deep = abs(max-min)
+                    #         print("deepth:",deep)
+                    #         lastMin = max
+                    #     if(float(RElbow[1]) < lastmin):
+                    #         lastmin = float(RElbow[1])
+                    #     elif (float(RElbow[1]) > lastmin):
+                    #         min = lastMin
+                    #         Rebound = abs(max - min)
+                    #         print("Rebound:",Rebound)
+                    #         max = min
+
                     if i % 10 == 0:
                         # hands = self.collection.find({"Id": self.id, "items": i}).next()
                         if self.is_test:
