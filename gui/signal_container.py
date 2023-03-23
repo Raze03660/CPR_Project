@@ -7,6 +7,8 @@ from gui.image import Image
 class SignalContainer(QObject):
     update_image = Signal(Image)
 
+class YOLOContainer(QObject):
+    update_image = Signal(Image)
 
 class PoseContainer(QObject):
     update_image = Signal(Image)
@@ -33,4 +35,7 @@ class LabelDeepContainer(QObject):
 
 '''show Frequency between press'''
 class FrequencyLabelContainer(QObject):
+    update_label = Signal(str)
+
+class PostureLabelContainer(QObject):
     update_label = Signal(str)

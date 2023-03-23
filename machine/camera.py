@@ -8,12 +8,12 @@ from queue import Queue
 from threading import Thread
 
 import numpy as np
-from PySide6.QtCore import QThread
+from PySide6.QtCore import QThread, QCoreApplication
 import cv2
-from pymongo import MongoClient
-import openpose.pyopenpose as op
-from gui.signal_container import SignalContainer, LabelContainer, FrequenceContainer, LabelDeepContainer, \
-    FrequencyLabelContainer
+# from pymongo import MongoClient
+import pyopenpose as op
+from gui.signal_container import SignalContainer, LabelContainer, YOLOContainer, LabelDeepContainer, \
+    FrequencyLabelContainer, PostureLabelContainer
 from keypoints.angle import Angle
 from machine.BODY_25 import BODY_25
 from machine.position_config import PositionConfig
@@ -55,19 +55,20 @@ class Camera(QThread):
         self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.width)
         self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.height)
         self.rawdata = SignalContainer()  # original image
+        self.YoloRawdata = YOLOContainer()  # YOLO image
         self.right_hand = LabelContainer()  # angle of pose
         self.left_hand = LabelContainer()
         self.frequency_label = FrequencyLabelContainer()
         self.depth_estimate_label = LabelDeepContainer()
+        self.posture_label = PostureLabelContainer()
         # self.time_label = TimeLabelContainer()
         self.fourcc = cv2.VideoWriter_fourcc(*'XVID')
-
         # pose
 
         # mongodb setup
-        self.clients = MongoClient("mongodb://localhost:27017/")
-        self.database = self.clients['cpr']
-        self.collection = self.database['doctor_cpr_data']
+        # self.clients = MongoClient("mongodb://localhost:27017/")
+        # self.database = self.clients['cpr']
+        # self.collection = self.database['doctor_cpr_data']
 
         if self.is_play_sound:
             self.is_deep_abnormal = True
@@ -75,7 +76,7 @@ class Camera(QThread):
             self.is_freq_abnormal = True
 
         self.sound_queue = Queue()
-        self.sound_thread = Thread(target=handle_playsound, args=(self.sound_queue, ), daemon=True)
+        self.sound_thread = Thread(target=handle_playsound, args=(self.sound_queue,), daemon=True)
         self.sound_thread.start()
 
         if self.cap is None or not self.cap.isOpened():
@@ -103,7 +104,8 @@ class Camera(QThread):
         poseModel = op.PoseModel.BODY_25
 
         params = dict()
-        params["model_folder"] = "../models/"
+        params["model_folder"] = "/home/ezio/openpose/models/"
+        # resolution:320*camera(height/2)
         params["net_resolution"] = "320x-1"
         params['number_people_max'] = 1
         op_wrapper = op.WrapperPython()
@@ -118,6 +120,7 @@ class Camera(QThread):
             ret, frame = self.cap.read()
             if ret and self.is_preview:
                 self.rawdata.update_image.emit(frame)  # 發
+                self.YoloRawdata.update_image.emit(frame)  # 發
             if ret and not self.is_preview:
                 try:
                     last_time = datetime.datetime.now()
@@ -126,7 +129,8 @@ class Camera(QThread):
                     # get the 25 key points
                     keypoints = datum.poseKeypoints[0]
                     feature_array[frame_cnt, :, :] = keypoints
-                    # Right hand position [wrist, shouder ,elbow]
+
+                    # Right hand position [wrist, shoulder ,elbow]
                     RWrist = feature_array[frame_cnt, BODY_25.RWrist.value, :]
                     RShoulder = feature_array[frame_cnt, BODY_25.RShoulder.value, :]
                     RElbow = feature_array[frame_cnt, BODY_25.RElbow.value, :]
@@ -140,40 +144,69 @@ class Camera(QThread):
                     left_hand = [LShoulder, LElbow, LWrist]
                     left_angle = Angle(left_hand).angle_between_point()
 
-                    #  write data into mongodb
-                    cpr_info = {}
-                    cpr_info['Id'] = self.id
-                    cpr_info['items'] = i
-                    cpr_info['datetime'] = datetime.datetime.now()
-                    cpr_info['RShoulder_x'] = float(RShoulder[0])
-                    cpr_info['RShoulder_y'] = float(RShoulder[1])
-                    cpr_info['RElbow_x'] = float(RElbow[0])
-                    cpr_info['RElbow_y'] = float(RElbow[1])
-                    cpr_info['RWrist_x'] = float(RWrist[0])
-                    cpr_info['RWrist_y'] = float(RWrist[1])
-                    cpr_info['LShoulder_x'] = float(LShoulder[0])
-                    cpr_info['LShoulder_y'] = float(LShoulder[1])
-                    cpr_info['LElbow_x'] = float(LElbow[0])
-                    cpr_info['LElbow_y'] = float(LElbow[1])
-                    cpr_info['LWrist_x'] = float(LWrist[0])
-                    cpr_info['LWrist_y'] = float(LWrist[1])
-                    cpr_info['Left_Angle'] = left_angle
-                    cpr_info['Right_Angle'] = right_angle
-                    deepth = self.ratio * (float(RWrist[1]) - self.y1)
-                    cpr_info['depth'] = deepth
+                    # #  write data into mongodb
+                    # cpr_info = {}
+                    # cpr_info['Id'] = self.id
+                    # cpr_info['items'] = i
+                    # cpr_info['datetime'] = datetime.datetime.now()
+                    # cpr_info['RShoulder_x'] = float(RShoulder[0])
+                    # cpr_info['RShoulder_y'] = float(RShoulder[1])
+                    # cpr_info['RElbow_x'] = float(RElbow[0])
+                    # cpr_info['RElbow_y'] = float(RElbow[1])
+                    # cpr_info['RWrist_x'] = float(RWrist[0])
+                    # cpr_info['RWrist_y'] = float(RWrist[1])
+                    # cpr_info['LShoulder_x'] = float(LShoulder[0])
+                    # cpr_info['LShoulder_y'] = float(LShoulder[1])
+                    # cpr_info['LElbow_x'] = float(LElbow[0])
+                    # cpr_info['LElbow_y'] = float(LElbow[1])
+                    # cpr_info['LWrist_x'] = float(LWrist[0])
+                    # cpr_info['LWrist_y'] = float(LWrist[1])
+                    # cpr_info['Left_Angle'] = left_angle
+                    # cpr_info['Right_Angle'] = right_angle
+                    # deepth = self.ratio * (float(RWrist[1]) - self.y1)
+                    # cpr_info['depth'] = deepth
+
+                    print("left hand angle:", left_angle)
+                    print("right hand angle:", right_angle)
+
                     # dt = datetime.datetime.now()
                     # self.frequency_label.update_label.emit(str(dt))
-
-                    if left_angle != -1 and right_angle != -1:
-                        self.collection.insert_one(cpr_info)
+                    # if left_angle != -1 and right_angle != -1:
+                    # self.collection.insert_one(cpr_info)
                     if i % 10 == 0:
-                        hands = self.collection.find({"Id": self.id, "items": i}).next()
+                        # hands = self.collection.find({"Id": self.id, "items": i}).next()
                         if self.is_test:
-                            self.left_hand.update_label.emit(str(LWrist[1]))
-                            self.right_hand.update_label.emit(str(RWrist[1]))
+                            if left_angle == -1 or None:
+                                self.left_hand.update_label.emit(QCoreApplication.translate("Form",
+                                                                                                u"<html><head/><body><p align=\"center\"><span style=\" font-size:18pt; color:#ef2929;\">無法偵測到左手臂</span></p></body></html>",
+                                                                                                None))
+                            else:
+                                self.left_hand.update_label.emit(str(left_angle))
+
+                            if right_angle == -1 :
+                                self.right_hand.update_label.emit(QCoreApplication.translate("Form",
+                                                                                                u"<html><head/><body><p align=\"center\"><span style=\" font-size:18pt; color:#ef2929;\">無法偵測到右手臂</span></p></body></html>",
+                                                                                                None))
+                            else:
+                                self.right_hand.update_label.emit(str(right_angle))
+                            # self.left_hand.update_label.emit(str(left_angle))
+                            # self.right_hand.update_label.emit(str(right_angle))
+                            # self.left_hand.update_label.emit(str(LWrist[1]))
+                            # self.right_hand.update_label.emit(str(RWrist[1]))
                         else:
-                            self.left_hand.update_label.emit(str(hands['Left_Angle']))
-                            self.right_hand.update_label.emit(str(hands['Right_Angle']))
+                            if left_angle == -1 :
+                                self.left_hand.update_label.emit('無法偵測到左手臂')
+                            else:
+                                self.left_hand.update_label.emit(str(left_angle))
+                            if right_angle == -1 :
+                                self.right_hand.update_label.emit('無法偵測到右手臂')
+                            else:
+                                self.right_hand.update_label.emit(str(right_angle))
+
+                            # self.left_hand.update_label.emit(str(hands['Left_Angle']))
+                            # self.right_hand.update_label.emit(str(hands['Right_Angle']))
+                            # self.left_hand.update_label.emit(str(left_angle))
+                            # self.right_hand.update_label.emit(str(right_angle))
 
                         current_time = datetime.datetime.now()
                         self.frequency_label.update_label.emit(str(current_time))
@@ -183,32 +216,37 @@ class Camera(QThread):
                         # 2020.08.17
                         depth = round(self.ratio * (float(RWrist[1]) - self.y1), 2)
                         # self.depth_estimate_label.update_label.emit(str(depth))
-                        if depth <= 0 :
-                           self.depth_estimate_label.update_label.emit('手掌離開')
+                        if depth <= 0:
+                            self.depth_estimate_label.update_label.emit('手掌離開')
                         elif depth > 2 and depth < 8:
-                           self.depth_estimate_label.update_label.emit(str(depth))
+                            self.depth_estimate_label.update_label.emit(str(depth))
                         j = j + 1
 
                         # 2022.08.22
-                        if self.is_play_sound and j >= 10:
-                            if self.is_deep_abnormal and (depth > 7 or depth < 5):
-                                self.sound_queue.put('../sound/deep_abnormal.mp3')
-                                self.is_deep_abnormal = False
+                        if self.is_play_sound:
+                            # if self.is_deep_abnormal and (depth > 7 or depth < 5):
+                            #     self.sound_queue.put('/home/ezio/openpose/CPR_Project1/sound/deep_abnormal.mp3')
+                            #     self.is_deep_abnormal = False
 
                             if self.is_pose_abnormal and (right_angle <= 165 or left_angle <= 165):
-                                self.sound_queue.put('../sound/post_abnormal.mp3')
-                                self.is_pose_abnormal = False
-
+                                self.posture_label.update_label.emit(QCoreApplication.translate("Form",
+                                                                                                u"<html><head/><body><p align=\"center\"><span style=\" font-size:18pt; color:#ef2929;\">Abnormal</span></p></body></html>",
+                                                                                                None))
+                                self.sound_queue.put('/home/ezio/CPR_Project1/sound/post_abnormal.mp3')
+                            else:
+                                self.posture_label.update_label.emit('Normal')
 
                 except Exception as e:
+                    self.left_hand.update_label.emit(QCoreApplication.translate("Form",u"<html><head/><body><p align=\"center\"><span style=\" font-size:18pt; color:#ef2929;\">無法偵測到左手臂</span></p></body></html>",None))
+                    self.right_hand.update_label.emit(QCoreApplication.translate("Form",u"<html><head/><body><p align=\"center\"><span style=\" font-size:18pt; color:#ef2929;\">無法偵測到右手臂</span></p></body></html>",None))
                     print(e.__str__())
                     pass
                     # raise
                 i = i + 1
                 ''' '''
                 self.rawdata.update_image.emit(datum.cvOutputData)  # 發
-                if not self.is_preview and self.out:
-                    self.out.write(frame)
+                # if not self.is_preview and self.out:
+                #     self.out.write(frame)
 
     # preview the video
     def preview(self):
@@ -220,16 +258,26 @@ class Camera(QThread):
         if self.connect:
             self.running = True  # 啟動讀取狀態
             self.is_preview = False
-            time_str = time.strftime("%Y%m%d-%H%M%S")
-            if self.num_camera == 0:
-                self.filename = '../medias/x_cpr' + time_str + '.avi'
-                self.out = cv2.VideoWriter(self.filename, self.fourcc, 30.0, (self.width, self.height))
+            # time_str = time.strftime("%Y%m%d-%H%M%S")
+            # if self.num_camera == 0:
+            #     # 寫入影片
+            #     self.filename = '/home/ezio/openpose/CPR_Project1/medias/record/' + time_str + '.avi'
+            #     self.out = cv2.VideoWriter(self.filename, self.fourcc, 30.0, (self.width, self.height))
 
     def stop(self):
         if self.connect:
+            self.right_hand.update_label.emit(QCoreApplication.translate("Form",
+                                                                         u"<html><head/><body><p align=\"center\"><span style=\" font-size:18pt; font-weight:400;\">\u5c1a\u672a\u958b\u59cb\u5075\u6e2c</span></p></body></html>",
+                                                                         None))
+            self.left_hand.update_label.emit(QCoreApplication.translate("Form",
+                                                                        u"<html><head/><body><p align=\"center\"><span style=\" font-size:18pt; font-weight:400;\">\u5c1a\u672a\u958b\u59cb\u5075\u6e2c</span></p></body></html>",
+                                                                        None))
             self.running = False  # 關閉讀取狀態
+            self.is_preview = True
             # self.cap.release()
-            self.out.release()
+            # self.out.release()
+
+
 
     def exit(self, retcode=0):
         if self.connect:
@@ -239,12 +287,13 @@ class Camera(QThread):
 
     def get_arg_parser(self):
         parser = argparse.ArgumentParser()
-        parser.add_argument("-p", "--position", type=Path, default=Path("../configs/config.yaml"))
+        parser.add_argument("-p", "--position", type=Path, default=Path("/home/ezio/CPR_Project1/configs/config.yaml"))
 
         return parser
 
 
 def handle_playsound(queue: Queue):
     while True:
+        # 佇列中取出下一個聲音資料的路徑
         sound_path = queue.get()
         playsound.playsound(sound_path)

@@ -1,9 +1,9 @@
 import argparse
 import os
 import sys
-from keypoints.BODY_25 import BODY_25
+from machine.BODY_25 import BODY_25
 import cv2
-import openpose.pyopenpose as op
+import pyopenpose as op
 import numpy as np
 
 
@@ -92,7 +92,7 @@ if __name__ == '__main__':
     poseModel = op.PoseModel.BODY_25
 
     params = dict()
-    params["model_folder"] = "models/"
+    params["model_folder"] = "/home/ezio/openpose/models/"
     params["net_resolution"] = "320x-1"
     params['number_people_max'] = 1
     op_wrapper = op.WrapperPython()

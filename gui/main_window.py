@@ -4,14 +4,14 @@ from PySide6.QtGui import QImage, QPixmap
 from PySide6.QtWidgets import QMainWindow
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 
-from gui._gui import Ui_Form
+from gui.test9 import Ui_Form
 from gui.image import Image
 from machine.camera import Camera
-from pymongo import MongoClient
+# from pymongo import MongoClient
 import pandas as pd
 import matplotlib.pyplot as plt
 
-from machine.mock import  MockCamera
+from machine.mock import MockCamera
 
 
 class MainWindow(QMainWindow, Ui_Form):
@@ -24,31 +24,30 @@ class MainWindow(QMainWindow, Ui_Form):
         self.stopVideo.clicked.connect(self.stop_video)
         self.exit_btn.clicked.connect(self.exit)
         self.analysisBtn.clicked.connect(self.analysis)
+        self.stopVideo.setEnabled(False)
 
         if self.is_camera:
             self.camera()
         else:
             self.mock_method()
 
-
-    #ru8
+    # ru8
     def mock_method(self):
         self.mock = MockCamera(0)
         self.mock.rawdata.update_image.connect(self.set_moke_image)
         self.mock.start()
 
-
     def camera(self):
         self.ProcessCam_X = Camera(0, 800, 600)  # 建立相機物件(x)
         self.ProcessCam_X.rawdata.update_image.connect(self.set_image_x)  # 槽功能：取得並顯示影像
+        self.ProcessCam_X.YoloRawdata.update_image.connect(self.set_image_y)  # 槽功能：取得並顯示影像
         self.ProcessCam_X.right_hand.update_label.connect(self.set_right_hand_label)  # 右手角度
         self.ProcessCam_X.left_hand.update_label.connect(self.set_left_hand_label)  # 手角度
         # self.ProcessCam_X.time_label.update_label.connect(self.set_time_update)  # frequence
         self.ProcessCam_X.frequency_label.update_label.connect(self.set_frequency)
         self.ProcessCam_X.depth_estimate_label.update_label.connect(self.set_deepth)
+        self.ProcessCam_X.posture_label.update_label.connect(self.set_deepth)
         self.ProcessCam_X.preview()
-
-
 
     @Slot(str)
     def set_right_hand_label(self, message):
@@ -66,14 +65,15 @@ class MainWindow(QMainWindow, Ui_Form):
     def set_deepth(self, message):
         self.depthLabel.setText(message)
 
+    def set_posture_abnormal(self, message):
+        self.postureLabel.setText(message)
 
     @Slot(Image)
-    def set_moke_image(self,moke_image):
+    def set_moke_image(self, moke_image):
         image = QImage(moke_image, moke_image.shape[1], moke_image.shape[0], moke_image.strides[0],
                        QImage.Format_BGR888)
         pix = QPixmap.fromImage(image)
         self.img_label.setPixmap(pix)
-
 
     @Slot(Image)
     def set_image_x(self, camera_image):
@@ -81,6 +81,21 @@ class MainWindow(QMainWindow, Ui_Form):
                        QImage.Format_BGR888)
         pix = QPixmap.fromImage(image)
         self.img_label.setPixmap(pix)
+
+    @Slot(Image)
+    def set_image_y(self, camera_image):
+        scale_percent = 150  #放大倍率
+        width = int(camera_image.shape[1] * scale_percent / 100)
+        height = int(camera_image.shape[0] * scale_percent / 100)
+        dim = (width, height)
+        # 將圖像縮放至指定的尺寸
+        resized_image = cv2.resize(camera_image, dim, interpolation=cv2.INTER_LINEAR)
+        # 將縮放後的圖像轉換為 QImage
+        qimage = QImage(resized_image, resized_image.shape[1], resized_image.shape[0], resized_image.strides[0],
+                        QImage.Format_BGR888)
+        # 將 QImage 轉換為 QPixmap 並顯示
+        pixmap = QPixmap.fromImage(qimage)
+        self.img_label_2.setPixmap(pixmap)
 
     def start_video(self):
         if self.ProcessCam_X.connect:  # and self.ProcessCam_Y.connect:
@@ -99,24 +114,24 @@ class MainWindow(QMainWindow, Ui_Form):
             self.stopVideo.setEnabled(False)
 
     def analysis(self):
-        clients = MongoClient("mongodb://localhost:27017/")
-        database = clients['cpr']
-        collection = database['doctor_cpr_data']
+        # clients = MongoClient("mongodb://localhost:27017/")
+        # database = clients['cpr']
+        # collection = database['doctor_cpr_data']
         name_id = self.Id.toPlainText()
         print(name_id)
-        cursors = collection.find({"Id": name_id, "depth":{'$gt':2},"depth":{'$lt':8},"Left_Angle": {'$gt': 150}, "Right_Angle": {'$gt': 150}})
+        # cursors = collection.find({"Id": name_id, "depth": {'$gt': 2}, "depth": {'$lt': 8}, "Left_Angle": {'$gt': 150},
+        #                            "Right_Angle": {'$gt': 150}})
         # cursors = collection.find({"Id": "9", "LWrist_y": {'$gt': 380}, "RWrist_y": {'$gt': 380}}).limit(150)
-        df = pd.DataFrame(list(cursors))
+        # df = pd.DataFrame(list(cursors))
         fig_depth, ax1 = plt.subplots(nrows=1, )
         fig_depth.autofmt_xdate(rotation=90)
         ax1.plot(df['datetime'], df['depth'])
         fig_depth.savefig('depth.jpg', dpi=75)
         depth_image = cv2.imread('depth.jpg')
         depth_image = QImage(depth_image, 480, 380, depth_image.strides[0],
-                            QImage.Format_BGR888)
+                             QImage.Format_BGR888)
         depth = QPixmap.fromImage(depth_image)
         self.deepLabel.setPixmap(depth)
-
 
         fig_pose, ax1 = plt.subplots(nrows=1, )
         fig_pose.autofmt_xdate(rotation=90)

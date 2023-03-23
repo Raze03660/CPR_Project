@@ -4,7 +4,7 @@ from pathlib import Path
 
 import cv2
 from PySide6.QtCore import QThread
-import openpose.pyopenpose as op
+import pyopenpose as op
 from gui.signal_container import SignalContainer
 from machine.position_config import PositionConfig
 from fancy import config as cfg

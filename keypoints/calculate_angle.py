@@ -2,9 +2,9 @@ import json
 import os
 
 import numpy as np
-from pymongo import MongoClient
+# from pymongo import MongoClient
 
-from BODY_25 import BODY_25
+from machine.BODY_25 import BODY_25
 from keypoints.angle import HandAngle, Angle
 
 
@@ -35,8 +35,8 @@ def analysis_feature(features, write2Mongo = False):
             angle["filename"] = file
             angle["right"]= right_angle
             angle["left"] = left_angle
-            if write2Mongo == True:
-                collection.insert_one(angle)
+            # if write2Mongo == True:
+            #     collection.insert_one(angle)
             total = total + 1
             if right_angle>= standard_angle and left_angle>=standard_angle:
                 standard += 1
@@ -59,9 +59,9 @@ if __name__ == '__main__':
     video_dir = './npy/'
     root, _, files = next(os.walk('./npy'))
     file_cnt = 0
-    clients = MongoClient("mongodb://localhost:27017/")
-    database = clients['cpr_db']
-    collection = database['cpr_angle_data']
+    # clients = MongoClient("mongodb://localhost:27017/")
+    # database = clients['cpr_db']
+    # collection = database['cpr_angle_data']
     print("standard keypoints:165 ")
     print("non_stand_left,non_stand_right,standard,total,rate")
 
