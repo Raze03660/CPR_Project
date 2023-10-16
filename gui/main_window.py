@@ -4,7 +4,7 @@ from PySide6.QtGui import QImage, QPixmap
 from PySide6.QtWidgets import QMainWindow
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 
-from gui.test9 import Ui_Form
+from gui.Demo import Ui_Form
 from gui.image import Image
 from machine.camera import Camera
 # from pymongo import MongoClient
@@ -19,11 +19,12 @@ class MainWindow(QMainWindow, Ui_Form):
 
     def __init__(self):
         super(MainWindow, self).__init__()  #
+        self.center()
         self.setupUi(self)
         self.startVideo.clicked.connect(self.start_video)
         self.stopVideo.clicked.connect(self.stop_video)
         self.exit_btn.clicked.connect(self.exit)
-        self.analysisBtn.clicked.connect(self.analysis)
+       #self.analysisBtn.clicked.connect(self.analysis)
         self.stopVideo.setEnabled(False)
 
         if self.is_camera:
@@ -46,7 +47,8 @@ class MainWindow(QMainWindow, Ui_Form):
         # self.ProcessCam_X.time_label.update_label.connect(self.set_time_update)  # frequence
         self.ProcessCam_X.frequency_label.update_label.connect(self.set_frequency)
         self.ProcessCam_X.depth_estimate_label.update_label.connect(self.set_deepth)
-        self.ProcessCam_X.posture_label.update_label.connect(self.set_deepth)
+        self.ProcessCam_X.posture_label.update_label.connect(self.set_posture_abnormal)
+        self.ProcessCam_X.depth_posture_label.update_label.connect(self.set_depth_abnormal)
         self.ProcessCam_X.preview()
 
     @Slot(str)
@@ -64,10 +66,12 @@ class MainWindow(QMainWindow, Ui_Form):
     @Slot(str)
     def set_deepth(self, message):
         self.depthLabel.setText(message)
-
+    @Slot(str)
     def set_posture_abnormal(self, message):
         self.postureLabel.setText(message)
-
+    @Slot(str)
+    def set_depth_abnormal(self, message):
+        self.depthPostureLabel.setText(message)
     @Slot(Image)
     def set_moke_image(self, moke_image):
         image = QImage(moke_image, moke_image.shape[1], moke_image.shape[0], moke_image.strides[0],
@@ -80,22 +84,14 @@ class MainWindow(QMainWindow, Ui_Form):
         image = QImage(camera_image, camera_image.shape[1], camera_image.shape[0], camera_image.strides[0],
                        QImage.Format_BGR888)
         pix = QPixmap.fromImage(image)
-        self.img_label.setPixmap(pix)
+        self.img_label_1.setPixmap(pix)
 
     @Slot(Image)
     def set_image_y(self, camera_image):
-        scale_percent = 150  #放大倍率
-        width = int(camera_image.shape[1] * scale_percent / 100)
-        height = int(camera_image.shape[0] * scale_percent / 100)
-        dim = (width, height)
-        # 將圖像縮放至指定的尺寸
-        resized_image = cv2.resize(camera_image, dim, interpolation=cv2.INTER_LINEAR)
-        # 將縮放後的圖像轉換為 QImage
-        qimage = QImage(resized_image, resized_image.shape[1], resized_image.shape[0], resized_image.strides[0],
-                        QImage.Format_BGR888)
-        # 將 QImage 轉換為 QPixmap 並顯示
-        pixmap = QPixmap.fromImage(qimage)
-        self.img_label_2.setPixmap(pixmap)
+        image = QImage(camera_image, camera_image.shape[1], camera_image.shape[0], camera_image.strides[0],
+                       QImage.Format_BGR888)
+        pix = QPixmap.fromImage(image)
+        self.img_label_2.setPixmap(pix)
 
     def start_video(self):
         if self.ProcessCam_X.connect:  # and self.ProcessCam_Y.connect:
@@ -109,6 +105,7 @@ class MainWindow(QMainWindow, Ui_Form):
     def stop_video(self):
         if self.ProcessCam_X.connect:
             self.ProcessCam_X.stop()
+            self.ProcessCam_X.posture_label.update_label.connect(self.set_deepth)
             self.ProcessCam_X.preview()
             self.startVideo.setEnabled(True)
             self.stopVideo.setEnabled(False)
@@ -155,6 +152,10 @@ class MainWindow(QMainWindow, Ui_Form):
         freq = QPixmap.fromImage(freq_image)
 
         self.frequenceLabel.setPixmap(freq)
+
+    def center(self):
+        # 獲取螢幕參數
+        self.move(350,100)
 
     def exit(self):
         self.ProcessCam_X.exit()

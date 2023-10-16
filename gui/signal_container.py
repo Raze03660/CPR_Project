@@ -39,3 +39,5 @@ class FrequencyLabelContainer(QObject):
 
 class PostureLabelContainer(QObject):
     update_label = Signal(str)
+class DepthPostureLabelContainer(QObject):
+    update_label = Signal(str)
