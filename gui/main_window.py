@@ -39,16 +39,18 @@ class MainWindow(QMainWindow, Ui_Form):
         self.mock.start()
 
     def camera(self):
-        self.ProcessCam_X = Camera(0, 800, 600)  # 建立相機物件(x)
+        self.ProcessCam_X = Camera(0)  # 建立相機物件(x)
         self.ProcessCam_X.rawdata.update_image.connect(self.set_image_x)  # 槽功能：取得並顯示影像
         self.ProcessCam_X.YoloRawdata.update_image.connect(self.set_image_y)  # 槽功能：取得並顯示影像
         self.ProcessCam_X.right_hand.update_label.connect(self.set_right_hand_label)  # 右手角度
         self.ProcessCam_X.left_hand.update_label.connect(self.set_left_hand_label)  # 手角度
         # self.ProcessCam_X.time_label.update_label.connect(self.set_time_update)  # frequence
         self.ProcessCam_X.frequency_label.update_label.connect(self.set_frequency)
+        self.ProcessCam_X.rate_label.update_label.connect(self.set_rate)
         self.ProcessCam_X.depth_estimate_label.update_label.connect(self.set_deepth)
         self.ProcessCam_X.posture_label.update_label.connect(self.set_posture_abnormal)
         self.ProcessCam_X.depth_posture_label.update_label.connect(self.set_depth_abnormal)
+        self.ProcessCam_X.position_label.update_label.connect(self.set_position_abnormal)
         self.ProcessCam_X.preview()
 
     @Slot(str)
@@ -64,6 +66,10 @@ class MainWindow(QMainWindow, Ui_Form):
         self.frequencyLabel.setText(message)
 
     @Slot(str)
+    def set_rate(self, message):
+        self.label_18.setText(message)
+
+    @Slot(str)
     def set_deepth(self, message):
         self.depthLabel.setText(message)
     @Slot(str)
@@ -72,6 +78,10 @@ class MainWindow(QMainWindow, Ui_Form):
     @Slot(str)
     def set_depth_abnormal(self, message):
         self.depthPostureLabel.setText(message)
+
+    @Slot(str)
+    def set_position_abnormal(self, message):
+        self.label_17.setText(message)
     @Slot(Image)
     def set_moke_image(self, moke_image):
         image = QImage(moke_image, moke_image.shape[1], moke_image.shape[0], moke_image.strides[0],
