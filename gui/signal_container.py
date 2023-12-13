@@ -47,3 +47,19 @@ class PositionLabelContainer(QObject):
 class RateLabelContainer(QObject):
     update_label = Signal(str)
 
+class DeepLabelResultContainer(QObject):
+    update_label = Signal(str)
+
+class FrequencyLabelResultContainer(QObject):
+    update_label = Signal(str)
+
+class PostureLabelResultContainer(QObject):
+    update_label = Signal(str)
+
+class textEditResultContainer(QObject):
+    update_label = Signal(str)
+class downloadButtonContainer(QObject):
+    update_label = Signal(str)
+
+
+

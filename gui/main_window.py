@@ -1,10 +1,11 @@
 import cv2
 from PySide6.QtCore import Slot
+from PySide6.QtCore import Qt
 from PySide6.QtGui import QImage, QPixmap
 from PySide6.QtWidgets import QMainWindow
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
-
-from gui.Demo import Ui_Form
+import pdf_test
+from gui.Demo3 import Ui_Form
 from gui.image import Image
 from machine.camera import Camera
 # from pymongo import MongoClient
@@ -21,12 +22,11 @@ class MainWindow(QMainWindow, Ui_Form):
         super(MainWindow, self).__init__()  #
         self.center()
         self.setupUi(self)
+        self.setWindowFlag(Qt.WindowMaximizeButtonHint, False)
         self.startVideo.clicked.connect(self.start_video)
         self.stopVideo.clicked.connect(self.stop_video)
         self.exit_btn.clicked.connect(self.exit)
-       #self.analysisBtn.clicked.connect(self.analysis)
         self.stopVideo.setEnabled(False)
-
         if self.is_camera:
             self.camera()
         else:
@@ -41,16 +41,14 @@ class MainWindow(QMainWindow, Ui_Form):
     def camera(self):
         self.ProcessCam_X = Camera(0)  # 建立相機物件(x)
         self.ProcessCam_X.rawdata.update_image.connect(self.set_image_x)  # 槽功能：取得並顯示影像
-        self.ProcessCam_X.YoloRawdata.update_image.connect(self.set_image_y)  # 槽功能：取得並顯示影像
         self.ProcessCam_X.right_hand.update_label.connect(self.set_right_hand_label)  # 右手角度
         self.ProcessCam_X.left_hand.update_label.connect(self.set_left_hand_label)  # 手角度
-        # self.ProcessCam_X.time_label.update_label.connect(self.set_time_update)  # frequence
-        self.ProcessCam_X.frequency_label.update_label.connect(self.set_frequency)
-        self.ProcessCam_X.rate_label.update_label.connect(self.set_rate)
         self.ProcessCam_X.depth_estimate_label.update_label.connect(self.set_deepth)
-        self.ProcessCam_X.posture_label.update_label.connect(self.set_posture_abnormal)
-        self.ProcessCam_X.depth_posture_label.update_label.connect(self.set_depth_abnormal)
-        self.ProcessCam_X.position_label.update_label.connect(self.set_position_abnormal)
+        self.ProcessCam_X.frequency_label.update_label.connect(self.set_frequency)
+        self.ProcessCam_X.deep_result_label.update_label.connect(self.set_deep)
+        self.ProcessCam_X.frequency_result_label.update_label.connect(self.set_frequency_result)
+        self.ProcessCam_X.posture_result_label.update_label.connect(self.set_posture)
+        self.ProcessCam_X.textEdit_result_label.update_label.connect(self.set_textEdit)
         self.ProcessCam_X.preview()
 
     @Slot(str)
@@ -65,23 +63,26 @@ class MainWindow(QMainWindow, Ui_Form):
     def set_frequency(self, message):
         self.frequencyLabel.setText(message)
 
-    @Slot(str)
-    def set_rate(self, message):
-        self.label_18.setText(message)
 
     @Slot(str)
     def set_deepth(self, message):
         self.depthLabel.setText(message)
     @Slot(str)
-    def set_posture_abnormal(self, message):
-        self.postureLabel.setText(message)
-    @Slot(str)
-    def set_depth_abnormal(self, message):
-        self.depthPostureLabel.setText(message)
+    def set_deep(self, message):
+        self.deep_result.setText(message)
 
     @Slot(str)
-    def set_position_abnormal(self, message):
-        self.label_17.setText(message)
+    def set_frequency_result(self, message):
+        self.frequency_result.setText(message)
+
+    @Slot(str)
+    def set_posture(self, message):
+        self.poseture_result.setText(message)
+
+    @Slot(str)
+    def set_textEdit(self, message):
+        self.textEdit.setText(message)
+
     @Slot(Image)
     def set_moke_image(self, moke_image):
         image = QImage(moke_image, moke_image.shape[1], moke_image.shape[0], moke_image.strides[0],
@@ -96,13 +97,6 @@ class MainWindow(QMainWindow, Ui_Form):
         pix = QPixmap.fromImage(image)
         self.img_label_1.setPixmap(pix)
 
-    @Slot(Image)
-    def set_image_y(self, camera_image):
-        image = QImage(camera_image, camera_image.shape[1], camera_image.shape[0], camera_image.strides[0],
-                       QImage.Format_BGR888)
-        pix = QPixmap.fromImage(image)
-        self.img_label_2.setPixmap(pix)
-
     def start_video(self):
         if self.ProcessCam_X.connect:  # and self.ProcessCam_Y.connect:
             self.ProcessCam_X.running = True
@@ -111,14 +105,14 @@ class MainWindow(QMainWindow, Ui_Form):
             self.ProcessCam_X.start()
             self.startVideo.setEnabled(False)
             self.stopVideo.setEnabled(True)
-
     def stop_video(self):
         if self.ProcessCam_X.connect:
             self.ProcessCam_X.stop()
-            self.ProcessCam_X.posture_label.update_label.connect(self.set_deepth)
             self.ProcessCam_X.preview()
             self.startVideo.setEnabled(True)
             self.stopVideo.setEnabled(False)
+
+
 
     def analysis(self):
         # clients = MongoClient("mongodb://localhost:27017/")
