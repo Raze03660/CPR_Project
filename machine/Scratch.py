@@ -2,7 +2,7 @@ import socket
 import sys
 class Scratch:
     # 设置服务器 IP 和端口
-    server_ip = "140.128.18.98"
+    server_ip = "10.42.0.1"
     server_port = 8080
 
     # 打開文件以追加模式寫入，如果文件不存在則創建

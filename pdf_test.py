@@ -10,7 +10,7 @@ from reportlab.lib import colors
 
 pdfmetrics.registerFont(reportlab.pdfbase.ttfonts.TTFont('SimSun', 'SimSun.ttf'))  # 注册字体
 # Function to create the PDF certificate with the specified background image
-def create_certificate_with_specified_background(result_list,name,passed1,passed2,passed3,filename, background_img_path):
+def create_certificate_with_specified_background(deep,frequency,poseend,name,passed1,passed2,passed3,filename, background_img_path):
     c = canvas.Canvas(filename, pagesize=letter)
     # 繪製背景圖片
     c.drawImage(background_img_path, 0, 0, width=letter[0], height=letter[1], mask='auto')
@@ -65,9 +65,9 @@ def create_certificate_with_specified_background(result_list,name,passed1,passed
     )
     # 在頁面中央添加段落
     text = (f"學員姓名: {name}<br/>"
-            f"按壓深度: 平均深度 {round(result_list[0]*100,1)}%<br/>"
-            f"按壓頻率: 平均頻率 {round(result_list[1]*100,1)}%  <br/>"
-            f"按壓姿勢: 平均失敗次數 {result_list[2]} <br/>")
+            f"按壓深度: 深度正確率達 {round(deep*100,1)}%<br/>"
+            f"按壓頻率: 頻率正確率達 {round(frequency*100,1)}%  <br/>"
+            f"按壓姿勢: 平均失敗次數 {int(poseend)} <br/>")
 
     text_result = (f"{passed1}!<br/>"
                    f"{passed2}!<br/>"
@@ -81,12 +81,12 @@ def create_certificate_with_specified_background(result_list,name,passed1,passed
     w, h = p.wrap(letter[0], letter[1])
     w1, h1 = p2.wrap(letter[0], letter[1])
     p.drawOn(c, 130, 300)
-    p2.drawOn(c, 400, 300)
+    p2.drawOn(c, 430, 300)
 
     congrat_text = "恭喜通過   CPR教學輔助系統"
     congrat_text1 = "您未通過本次CPR教學輔助系統，請繼續加油！"
     # 单独居中的一行
-    if result_list[0]>=0.8 and result_list[1]>=0.6:
+    if deep>=0.8 and frequency>=0.6:
         congrat_p = Paragraph(congrat_text, center_style)
         congrat_w, congrat_h = congrat_p.wrap(letter[0], letter[1])
         congrat_p.drawOn(c, (letter[0] - congrat_w) / 2, (letter[1] - h) / 2 - 40)  # 下移40pt以避免重叠
@@ -140,6 +140,8 @@ specified_background_pdf_filename = '/home/ezio/CPR_Project_Demo/CPR_Certificate
 
 # Path to the newly uploaded background image
 specified_background_img_path = '/home/ezio/CPR_Project_Demo/pic/cpr_certificate_background3.png'
-
+dep = 0.3
+fre = 0.9
+pos = 3
 # Create the certificate with the specified background
-create_certificate_with_specified_background(result_list_test,participant_name,Passed1,Passed2,Passed3,specified_background_pdf_filename, specified_background_img_path)
+create_certificate_with_specified_background(dep,fre,pos,participant_name,Passed1,Passed2,Passed3,specified_background_pdf_filename, specified_background_img_path)
