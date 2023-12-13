@@ -2,7 +2,7 @@ import socket
 import sys
 class Scratch:
     # 设置服务器 IP 和端口
-    server_ip = "140.128.18.93"
+    server_ip = "140.128.18.98"
     server_port = 8080
 
     # 打開文件以追加模式寫入，如果文件不存在則創建
@@ -83,3 +83,4 @@ class Scratch:
     #     current_time = end_time - start_time
     #     print(current_time)
     #     self.frequency_label.update_label.emit(str(current_time))
+

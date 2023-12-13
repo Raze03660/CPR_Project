@@ -1,28 +1,23 @@
 # Camera
-import argparse
-import datetime
 import re
 import socket
-import json
-import time
-from pathlib import Path
 from queue import Queue
 from threading import Thread
-import threading
 import numpy as np
 from PySide6.QtCore import QThread, QCoreApplication
-import cv2
 # from pymongo import MongoClient
 import pyopenpose as op
-from gui.signal_container import SignalContainer, LabelContainer, YOLOContainer, LabelDeepContainer, \
-    FrequencyLabelContainer, DepthPostureLabelContainer, PostureLabelContainer, PositionLabelContainer, RateLabelContainer
+from gui.signal_container import SignalContainer, LabelContainer, LabelDeepContainer, \
+    FrequencyLabelContainer, DepthPostureLabelContainer, PositionLabelContainer, \
+    RateLabelContainer, FrequencyLabelResultContainer, DeepLabelResultContainer, PostureLabelResultContainer, \
+    textEditResultContainer
 from keypoints.angle import Angle
 from machine.BODY_25 import BODY_25
 from machine.position_config import PositionConfig
+from pdf_test import create_certificate_with_specified_background
 # from machine.Scratch import Scratch
 from fancy import config as cfg
 import playsound
-import csv
 import argparse
 import time
 from pathlib import Path
@@ -69,22 +64,36 @@ class Camera(QThread):
         self.lastmin = 0
         self.depth = position_config.depth
         self.ratio = 0.4
+        self.result_str_save = 0
+        self.control = True
+        self.counter = 0
+        self.Round = 1
+        self.deepnum = 0
+        self.frequencynum = 0
+        self.poseturenum = 0
+        self.frequencycounter = 0
+        self.passed1 = "Passed"
+        self.passed2 = "Passed"
+        self.passed3 = "Passed"
         self.is_play_sound = None
         self.is_test = position_config.is_test
         self.is_stop = False
         self.float_array = []  # test2
+        self.result_array = []
         self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.width)
         self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.height)
         self.rawdata = SignalContainer()  # original image
-        self.YoloRawdata = YOLOContainer()  # YOLO image
         self.right_hand = LabelContainer()  # angle of pose
         self.left_hand = LabelContainer()
         self.frequency_label = FrequencyLabelContainer()
         self.depth_estimate_label = LabelDeepContainer()
-        self.posture_label = PostureLabelContainer()
         self.depth_posture_label = DepthPostureLabelContainer()
         self.rate_label = RateLabelContainer()
+        self.deep_result_label = DeepLabelResultContainer()
+        self.frequency_result_label = FrequencyLabelResultContainer()
         self.position_label = PositionLabelContainer()
+        self.posture_result_label = PostureLabelResultContainer()
+        self.textEdit_result_label = textEditResultContainer()
         # self.time_label = TimeLabelContainer()
         self.fourcc = cv2.VideoWriter_fourcc(*'XVID')
 
@@ -106,13 +115,11 @@ class Camera(QThread):
         self.view_img = args.view_img
 
         # 深度初始化 设置服务器 IP 和端口
-        self.server_ip = "140.128.18.93"
+        self.server_ip = "140.128.18.98"
         self.server_port = 8080
         # Load audio files
-        self.correct_sound = pygame.mixer.Sound(
-            '/home/ezio/PycharmProjects/squretest/按壓位置正確.mp3')  # Replace with your correct sound file
         self.incorrect_sound = pygame.mixer.Sound(
-            '/home/ezio/CPR_Project_Demo/sound/posture_abnormal.wav')  # Replace with your incorrect sound file
+            '/home/ezio/CPR_Project_Demo/sound/postition_abnormal.wav')  # Replace with your incorrect sound file
         self.start_openpose_sound = pygame.mixer.Sound(
             '/home/ezio/CPR_Project_Demo/sound/start_openpose.wav')  # Replace with your incorrect sound file
         # if self.is_play_sound:
@@ -133,7 +140,7 @@ class Camera(QThread):
             self.running = True
             self.is_preview = True
 
-    def setId(self, Id=9527):
+    def setId(self, Id="Default User"):
         self.id = Id
 
     # 计算两个边界框之间的水平距离
@@ -146,7 +153,6 @@ class Camera(QThread):
         return distance
 
     def run_yolo(self):
-
         count = 0
         source, weights, imgsz = str(self.source), self.weights, self.img_size
         print("初始化...")
@@ -196,7 +202,7 @@ class Camera(QThread):
 
                 # Process detections
                 for i, det in enumerate(pred):  # detections per image
-                    count+=1
+                    count += 1
                     p, s, im0, _ = path, '', im0s[0], dataset.count
 
                     p = Path(p[0])  # to Path
@@ -220,18 +226,17 @@ class Camera(QThread):
                             box1, box2 = det[:2, :4].cpu().numpy()  # Get the first two boxes
                             distance = self.calculate_distance(box1, box2)
                             s += f"Distance: {distance:.2f}px"
-
                             # Determine if the distance is correct or not
-                            if 80 <= distance <= 110:
+                            if 82.5 <= distance <= 100:
                                 print("按壓位置正確")
                                 self.position_label.update_label.emit(QCoreApplication.translate("Form",
-                                                                           u"<html><head/><body><p align=\"center\"><span style=\" font-size:24pt;\">Normal</span></p></body></html>",
+                                                                                                 u"<html><head/><body><p align=\"center\"><span style=\" font-size:24pt;\">Normal</span></p></body></html>",
                                                                                                  None))
 
-                                #self.correct_sound.play()
+                                # self.correct_sound.play()
                                 distance_text = "Correct"
                                 distance_color = (0, 255, 0)  # Green color for correct distance
-                                self.YoloRawdata.update_image.emit(im0)  # 發送 YOLO 處理後的圖像
+                                self.rawdata.update_image.emit(im0)  # 發送 YOLO 處理後的圖像
                                 if self.correct_pose_start_time is None:
                                     self.correct_pose_start_time = time.time()  # 开始计时
                                 elif time.time() - self.correct_pose_start_time >= 5.0:
@@ -247,12 +252,12 @@ class Camera(QThread):
                                 self.position_label.update_label.emit(QCoreApplication.translate("Form",
                                                                                                  u"<html><head/><body><p align=\"center\"><span style=\" font-size:18pt; color:#ef2929;\">Abnormal</span></p></body></html>",
                                                                                                  None))
-                                if count % 60 ==0:
+                                if count % 40 == 0:
                                     self.incorrect_sound.play()
 
-                                #self.incorrect_sound.play()
+                                # self.incorrect_sound.play()
                                 print("按壓位置異常請重新調整")
-                                self.YoloRawdata.update_image.emit(im0)  # 發送 YOLO 處理後的圖像
+                                self.rawdata.update_image.emit(im0)  # 發送 YOLO 處理後的圖像
                                 self.correct_pose_start_time = None  # 重置计时器
 
                             # Display distance and correctness in the top-left corner
@@ -271,12 +276,12 @@ class Camera(QThread):
                         label = f'{names[int(cls)]} {conf:.2f}'
                         plot_one_box(xyxy, im0, label=label, color=colors[int(cls)], line_thickness=1)
                     else:
-                        self.YoloRawdata.update_image.emit(im0)  # 发送原始图像，因为没有检测到任何对象
+                        self.rawdata.update_image.emit(im0)  # 发送原始图像，因为没有检测到任何对象
 
                     self.position_label.update_label.emit(QCoreApplication.translate("Form",
                                                                                      u"<html><head/><body><p align=\"center\"><span style=\" font-size:18pt; color:#ef2929;\">Abnormal</span></p></body></html>",
                                                                                      None))
-                    self.YoloRawdata.update_image.emit(im0)  # 發送 YOLO 處理後的圖像
+                    self.rawdata.update_image.emit(im0)  # 發送 YOLO 處理後的圖像
                     # Print time (inference + NMS)
                     print(f'{s}Done. ({(1E3 * (t2 - t1)):.1f}ms)')
             else:
@@ -286,7 +291,6 @@ class Camera(QThread):
         # print(f'Done. ({time.time() - t0:.3f}s)')
 
     def run(self) -> None:
-
 
         frame_cnt = 0
         # todo
@@ -322,25 +326,25 @@ class Camera(QThread):
         # 開始監聽
         server_socket.listen(1)
         print(f"等待連接在 {self.server_ip}:{self.server_port} 上的消息...")
-
+        # 接收端連線
+        client_socket, client_address = server_socket.accept()
+        print(f"已連接到 {client_address}")
 
         while self.running and self.connect:
             # yolo還沒偵測過
             if self.yolo_not_detect_once and not self.is_preview and not self.is_stop:
+                self.sound_queue.put("/home/ezio/CPR_Project_Demo/sound/CPR_Start.wav")
                 print("開始執行YOLO辨識")
+                self.sound_queue.put("/home/ezio/CPR_Project_Demo/sound/yolo_start.wav")
                 self.run_yolo()
                 self.yolo_not_detect_once = False
                 self.start_openpose_sound.play()
                 print("YOLO辨識執行結束")
-                #接收端連線
-                client_socket, client_address = server_socket.accept()
-                print(f"已連接到 {client_address}")
 
                 start_time = time.time()
             ret, frame = self.cap.read()
             if ret and self.is_preview:
                 self.rawdata.update_image.emit(frame)  # 發
-                self.YoloRawdata.update_image.emit(frame)  # 發
                 self.right_hand.update_label.emit(QCoreApplication.translate("Form",
                                                                              u"<html><head/><body><p align=\"center\"><span style=\" font-size:18pt; font-weight:400;\">尚未開始偵測</span></p></body></html>",
                                                                              None))
@@ -354,15 +358,12 @@ class Camera(QThread):
                 self.frequency_label.update_label.emit(QCoreApplication.translate("Form",
                                                                                   u"<html><head/><body><p align=\"center\"><span style=\" font-size:18pt; font-weight:400;\">尚未開始偵測</span></p></body></html>",
                                                                                   None))
-                self.posture_label.update_label.emit(QCoreApplication.translate("Form",
-                                                                                u"<html><head/><body><p align=\"center\"><span style=\" font-size:18pt; font-weight:400;\">尚未開始偵測</span></p></body></html>",
-                                                                                None))
                 self.depth_posture_label.update_label.emit(QCoreApplication.translate("Form",
-                                                                                u"<html><head/><body><p align=\"center\"><span style=\" font-size:18pt; font-weight:400;\">尚未開始偵測</span></p></body></html>",
-                                                                                None))
-                self.rate_label.update_label.emit(QCoreApplication.translate("Form",
                                                                                       u"<html><head/><body><p align=\"center\"><span style=\" font-size:18pt; font-weight:400;\">尚未開始偵測</span></p></body></html>",
                                                                                       None))
+                self.rate_label.update_label.emit(QCoreApplication.translate("Form",
+                                                                             u"<html><head/><body><p align=\"center\"><span style=\" font-size:18pt; font-weight:400;\">尚未開始偵測</span></p></body></html>",
+                                                                             None))
 
             if ret and not self.is_preview and not self.is_stop:
                 try:
@@ -410,8 +411,24 @@ class Camera(QThread):
                     left_hand = [LShoulder, LElbow, LWrist]
                     left_angle = Angle(left_hand).angle_between_point()
 
+                    if float(result_str) > 5.5 and float(result_str) < 7.5 and self.control == True:
+                        self.control = False
+                        self.counter += 1
+                        if float(result_str) >= 5 and float(result_str) <= 7:
+                            self.deepnum += 1
+                        print(self.counter)
+                    if float(result_str) < 5.5 and self.control == False:
+                        self.control = True
+                    if self.counter == 30:
+                        self.Round += 1
+                        self.counter = 0
+
+                    # if self.Round == 6 :
+                    #     self.Round =1
+                    # self.result_str_save = float(result_str)
+
                     if i % 5 == 0:
-                        if 5.0 <= float(result_str) and float(result_str) <= 7.0:
+                        if 5.0 <= float(result_str) <= 7.0:
                             end_time = time.time()
                             current_time = end_time - start_time
                             timee = (60 / current_time)
@@ -419,21 +436,28 @@ class Camera(QThread):
                             #                                                                  u"<html><head/><body><p align=\"center\"><span style=\" font-size:18pt; font-weight:400;\">Normal</span></p></body></html>",
                             #                                                                  None))
                             # if float(timee)-120 > 90 and float(timee) - 120 < 135:
+
                             if round(timee, 2) + 95 < 140:
-                                self.frequency_label.update_label.emit(str(round(timee, 2)+95))
-                            # if timee > 100 and timee < 120:
-                            #     self.rate_label.update_label.emit(QCoreApplication.translate("Form",
-                            #                                                                  u"<html><head/><body><p align=\"center\"><span style=\" font-size:18pt; font-weight:400;\">Normal</span></p></body></html>",
-                            #                                                                  None))
-                            # else :
-                            #     self.rate_label.update_label.emit(QCoreApplication.translate("Form",
-                            #                                                                  u"<html><head/><body><p align=\"center\"><span style=\" font-size:18pt; font-weight:400;\">Abnormal</span></p></body></html>",
-                            #                                                                  None))
-                            # self.depth_posture_label.update_label.emit(QCoreApplication.translate("Form",
-                            #                                                                  u"<html><head/><body><p align=\"center\"><span style=\" font-size:18pt; font-weight:400;\">Abnormal</span></p></body></html>",
-                            #                                                                  None))
-                            start_time = end_time
-                    if i % 45 == 0:
+                                self.frequencycounter += 1
+                                self.frequency_label.update_label.emit(str(round(timee, 2) + 95))
+                                print(round(timee, 2) + 95)
+
+                                if round(timee, 2) + 95 > 122 and round(timee, 2) + 95 < 139:
+                                    self.frequency_label.update_label.emit(QCoreApplication.translate("Form",
+                                                                                                      u"<html><head/><body><p align=\"center\"><span style=\" font-size:18pt; color:#ef2929;\">按壓頻率太快</span></p></body></html>",
+                                                                                                      None))
+                                    self.sound_queue.put('/home/ezio/CPR_Project_Demo/sound/frequency_fast.wav')
+                                elif round(timee, 2) + 95 < 100 or (
+                                        round(timee, 2) + 95 < 140 and round(timee, 2) + 95 > 139):
+                                    self.frequency_label.update_label.emit(QCoreApplication.translate("Form",
+                                                                                                      u"<html><head/><body><p align=\"center\"><span style=\" font-size:18pt; color:#ef2929;\">按壓頻率太慢</span></p></body></html>",
+                                                                                                      None))
+                                    self.sound_queue.put('/home/ezio/CPR_Project_Demo/sound/frequency_low.wav')
+                                elif round(timee, 2) + 95 < 122 and round(timee, 2) + 95 > 100:
+                                    self.frequencynum += 1
+
+                        start_time = end_time
+                    if i % 20 == 0:
                         if self.is_play_sound:
                             # if self.is_deep_abnormal and (float(result_str) > 7 or float(result_str) < 5):
                             #     self.sound_queue.put('/home/ezio/openpose/CPR_Project_Demo/sound/deep_abnormal.mp3')
@@ -441,6 +465,11 @@ class Camera(QThread):
 
                             if right_angle <= 165 or left_angle <= 165:
                                 self.sound_queue.put('/home/ezio/CPR_Project_Demo/sound/post_abnormal.mp3')
+                                self.left_hand.update_label.emit(QCoreApplication.translate("Form",
+                                                                                            u"<html><head/><body><p align=\"center\"><span style=\" font-size:18pt; color:#ef2929;\">手臂角度異常</span></p></body></html>",
+                                                                                            None))
+                                self.poseturenum += 1
+
                         if right_angle <= 165 or left_angle <= 165:
                             self.is_play_sound = True
                         else:
@@ -451,7 +480,7 @@ class Camera(QThread):
                             if left_angle == -1 or None:
                                 self.left_hand.update_label.emit(QCoreApplication.translate("Form",
                                                                                             u"<html><head/><body><p align=\"center\"><span style=\" font-size:18pt; color:#ef2929;\">無法偵測到左手臂</span></p></body></html>",
-                                                                                    None))
+                                                                                            None))
                             else:
                                 self.left_hand.update_label.emit(QCoreApplication.translate("Form",
                                                                                             u"<html><head/><body><p align=\"center\"><span style=\" font-size:26pt;\">{}</span></p></body></html>".format(
@@ -468,14 +497,6 @@ class Camera(QThread):
                                                                                                  right_angle),
                                                                                              None))
 
-                            # self.left_hand.update_label.emit(str(left_angle))
-                            # self.right_hand.update_label.emit(str(right_angle))
-                            # self.left_hand.update_label.emit(str(LWrist))
-                            # self.right_hand.update_label.emit(str(RWrist))
-                            # print("左手腕",str(LWrist[1]))
-                            # print("右手腕",str(RWrist[1]))
-                            # print(str(LWrist[1]))
-                            # print(str(RWrist[1]) + ',', end="")
                         else:
                             if left_angle == -1:
                                 self.left_hand.update_label.emit('無法偵測到左手臂')
@@ -492,22 +513,107 @@ class Camera(QThread):
                             # self.left_hand.update_label.emit(str(left_angle))
                             # self.right_hand.update_label.emit(str(right_angle))
 
-
                         j = j + 1
                         # 2022.08.22
 
                         if (right_angle <= 165 or left_angle <= 165) and (left_angle != -1 or right_angle != -1):
-                            self.posture_label.update_label.emit(QCoreApplication.translate("Form",
-                                                                                          u"<html><head/><body><p align=\"center\"><span style=\" font-size:18pt; color:#ef2929;\">Abnormal</span></p></body></html>",
-                                                                                            None))
-                            self.depth_estimate_label.update_label.emit(str(result_str))
+                            if 5.0 <= float(result_str) <= 7.0:
+                                self.depth_estimate_label.update_label.emit(str(result_str))
                         else:
-                            self.posture_label.update_label.emit(QCoreApplication.translate("Form",
-                                                                                            u"<html><head/><body><p align=\"center\"><span style=\" font-size:18pt;\">Normal</span></p></body></html>",
+                            if 5.0 <= float(result_str) <= 7.0:
+                                self.depth_estimate_label.update_label.emit(str(result_str))
+
+                    if self.Round == 2:
+                        self.sound_queue.put('/home/ezio/CPR_Project_Demo/sound/round_end.wav')
+                        # 判斷深度是否大於8成
+                        if float(self.deepnum / 30) >= 0.8:
+                            self.deep_result_label.update_label.emit(QCoreApplication.translate("Form",
+                                                                                                u"<html><head/><body><p align=\"center\"><span style=\" font-size:18pt; color:#ef2929;\">通過</span></p></body></html>",
+                                                                                                None))
+                            self.result_array[0]=float(self.deepnum / 30)
+                            print(f"深度:{self.deepnum}  按壓次數:{30} 正確率:{float(self.deepnum / 30)}")
+                            self.passed1 = "Passed"
+                        else:
+                            self.deep_result_label.update_label.emit(QCoreApplication.translate("Form",
+                                                                                                u"<html><head/><body><p align=\"center\"><span style=\" font-size:18pt; color:#ef2929;\">不通過</span></p></body></html>",
+                                                                                                None))
+                            self.result_array[0] = float(self.deepnum / 30)
+                            print(f"深度:{self.deepnum}  按壓次數:{30} 正確率:{float(self.deepnum / 30)}")
+                            self.passed1 = "Not Passed"
+
+                        # 判斷頻率是否大於6成
+                        if float(self.frequencynum / self.frequencycounter) >= 0.6:
+                            self.frequency_result_label.update_label.emit(QCoreApplication.translate("Form",
+                                                                                                     u"<html><head/><body><p align=\"center\"><span style=\" font-size:18pt; color:#ef2929;\">通過</span></p></body></html>",
+                                                                                                     None))
+                            self.result_array[1] = float(self.frequencynum / self.frequencycounter)
+                            print(
+                                f"頻率:{self.frequencynum}  按壓次數:{self.frequencycounter} 正確率:{float(self.frequencynum / self.frequencycounter)}")
+                            self.passed2 = "Passed"
+                        else:
+                            self.frequency_result_label.update_label.emit(QCoreApplication.translate("Form",
+                                                                                                     u"<html><head/><body><p align=\"center\"><span style=\" font-size:18pt; color:#ef2929;\">不通過</span></p></body></html>",
+                                                                                                     None))
+                            self.result_array[1] = float(self.frequencynum / self.frequencycounter)
+                            print(
+                                f"頻率:{self.frequencynum}  按壓次數:{self.frequencycounter} 正確率:{float(self.frequencynum / self.frequencycounter)}")
+                            self.passed2 = "Not Passed"
+
+                        # 判斷姿勢錯誤是否小於5次
+                        if self.poseturenum <= 5:
+                            self.posture_result_label.update_label.emit(QCoreApplication.translate("Form",
+                                                                                                   u"<html><head/><body><p align=\"center\"><span style=\" font-size:18pt; color:#ef2929;\">通過</span></p></body></html>",
+                                                                                                   None))
+                            self.result_array[2] = float(self.poseturenum)
+                            print(f"姿勢:{self.poseturenum}  錯誤次數:{float(self.poseturenum)}")
+                            self.passed3 = "Passed"
+                        else:
+                            self.posture_result_label.update_label.emit(QCoreApplication.translate("Form",
+                                                                                                   u"<html><head/><body><p align=\"center\"><span style=\" font-size:18pt; color:#ef2929;\">不通過</span></p></body></html>",
+                                                                                                   None))
+                            self.result_array[2] = float(self.poseturenum)
+                            print(f"姿勢:{self.poseturenum}  錯誤次數:{float(self.poseturenum)}")
+                            self.passed3 = "Not Passed"
+
+                        # 最終結果輸出
+                        if float(self.frequencynum / self.frequencycounter) >= 0.6 and float(self.deepnum / 30) >= 0.8:
+                            self.textEdit_result_label.update_label.emit(QCoreApplication.translate("Form",
+                                                                                                    u"<html><head/><body><p align=\"center\"><span style=\" font-size:28pt; color:#ef2929;\">恭喜通過</span></p></body></html>",
+                                                                                                    None))
+                            create_certificate_with_specified_background(self.result_array, self.id, self.passed1,
+                                                                         self.passed2,
+                                                                         self.passed3,
+                                                                         '/CPR_Certificate/cpr_certificate.pdf',
+                                                                         '/pic/cpr_certificate_background3.png')
+                        else:
+                            self.textEdit_result_label.update_label.emit(QCoreApplication.translate("Form",
+                                                                                                    u"<html><head/><body><p align=\"center\"><span style=\" font-size:28pt; color:#ef2929;\">再接再厲</span></p></body></html>",
+                                                                                                    None))
+                            create_certificate_with_specified_background(self.result_array, self.id, self.passed1,
+                                                                         self.passed2,
+                                                                         self.passed3,
+                                                                         '/CPR_Certificate/cpr_certificate.pdf',
+                                                                         '/pic/cpr_certificate_background3.png')
+
+
+                        # Reset info.
+                        self.Round = 1
+                        self.counter = 0
+                        self.poseturenum = 0
+                        self.deepnum = 0
+                        self.frequencynum = 0
+                        self.frequencycounter = 0
+
+                    if self.is_preview == True:
+                        self.deep_result_label.update_label.emit(QCoreApplication.translate("Form",
+                                                                                            u"<html><head/><body><p align=\"center\"><span style=\" font-size:18pt; color:#ef2929;\"></span></p></body></html>",
                                                                                             None))
-                            self.depth_estimate_label.update_label.emit(str(result_str))
-
-
+                        self.frequency_result_label.update_label.emit(QCoreApplication.translate("Form",
+                                                                                                 u"<html><head/><body><p align=\"center\"><span style=\" font-size:18pt; color:#ef2929;\"></span></p></body></html>",
+                                                                                                 None))
+                        self.posture_result_label.update_label.emit(QCoreApplication.translate("Form",
+                                                                                               u"<html><head/><body><p align=\"center\"><span style=\" font-size:18pt; color:#ef2929;\"></span></p></body></html>",
+                                                                                               None))
 
                 except Exception as e:
                     if e:
@@ -517,9 +623,6 @@ class Camera(QThread):
                         self.right_hand.update_label.emit(QCoreApplication.translate("Form",
                                                                                      u"<html><head/><body><p align=\"center\"><span style=\" font-size:18pt; color:#ef2929;\">無法偵測到右手臂</span></p></body></html>",
                                                                                      None))
-                        self.posture_label.update_label.emit(QCoreApplication.translate("Form",
-                                                                                        u"<html><head/><body><p align=\"center\"><span style=\" font-size:18pt; color:#ef2929;\">無法偵測到姿勢</span></p></body></html>",
-                                                                                        None))
                         self.depth_estimate_label.update_label.emit(QCoreApplication.translate("Form",
                                                                                                u"<html><head/><body><p align=\"center\"><span style=\" font-size:18pt; color:#ef2929;\">無法偵測到深度</span></p></body></html>",
                                                                                                None))
@@ -533,7 +636,6 @@ class Camera(QThread):
                 i = i + 1
                 ''' '''
                 self.rawdata.update_image.emit(datum.cvOutputData)  # 發
-                self.YoloRawdata.update_image.emit(frame)
                 # if not self.is_preview and self.out:
                 #     self.out.write(frame)
 
@@ -548,6 +650,7 @@ class Camera(QThread):
             self.running = True  # 啟動讀取狀態
             self.is_preview = False
             self.is_stop = False
+            # self.is_Certificate = False
             # time_str = time.strftime("%Y%m%d-%H%M%S")
             # if self.num_camera == 0:
             #     # 寫入影片
@@ -559,13 +662,12 @@ class Camera(QThread):
             self.running = True  # 關閉讀取狀態
             self.is_preview = True
             self.is_stop = True
-
+            # self.is_Certificate = True
 
     def exit(self, retcode=0):
         if self.connect:
             self.running = False  # 關閉讀取狀態
             # self.is_preview = False
-
         super().exit(retcode)
 
     def get_arg_parser(self):
